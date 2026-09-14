@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="Compte perso">
+  <rect width="48" height="48" rx="11" fill="#042C53"/>
+  <path d="M9 38V22l9.5-7.5V22L28 14.5V22l9.5-7.5V38z" fill="#38BDF8"/>
+  <rect x="9" y="38" width="30" height="4" rx="1.5" fill="#BAE6FD"/>
+</svg>
