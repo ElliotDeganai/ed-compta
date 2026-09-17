@@ -5,11 +5,11 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class RecurringItemRequest extends FormRequest
+class SimulationItemRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can('manage recurring');
+        return $this->user()->can('manage transactions');
     }
 
     /**
@@ -22,12 +22,9 @@ class RecurringItemRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:2000'],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:9999999'],
             'type' => ['required', Rule::in(['income', 'expense'])],
-            'day_of_month' => ['required', 'integer', 'min:1', 'max:31'],
-            'shift_to_business_day' => ['boolean'],
-            'starts_on' => ['required', 'date'],
-            'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
+            'occurred_on' => ['required', 'date'],
             'category_id' => ['nullable', 'exists:categories,id'],
-            'is_active' => ['boolean'],
+            'is_enabled' => ['boolean'],
         ];
     }
 }

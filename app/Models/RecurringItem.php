@@ -11,7 +11,7 @@ class RecurringItem extends Model
 {
     protected $fillable = [
         'user_id', 'category_id', 'name', 'description', 'amount',
-        'type', 'day_of_month', 'starts_on', 'ends_on', 'is_active',
+        'type', 'day_of_month', 'shift_to_business_day', 'starts_on', 'ends_on', 'is_active',
     ];
 
     protected function casts(): array
@@ -21,6 +21,7 @@ class RecurringItem extends Model
             'starts_on' => 'date',
             'ends_on' => 'date',
             'is_active' => 'boolean',
+            'shift_to_business_day' => 'boolean',
         ];
     }
 

@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             PermissionSeeder::class,
             CategorySeeder::class,
+            PageSeeder::class,
         ]);
 
         $user = User::firstOrCreate(

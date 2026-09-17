@@ -22,6 +22,47 @@
                 </div>
 
                 <div>
+                    <label class="mb-1 block text-[13px] text-slate-500" for="setting-cycle">Jour de début du cycle budgétaire</label>
+                    <input
+                        id="setting-cycle"
+                        v-model="form.cycle_start_day"
+                        type="number"
+                        min="1"
+                        max="28"
+                        class="w-full rounded-lg border-slate-300 text-sm focus:border-sky-500 focus:ring-sky-500 sm:w-40"
+                    />
+                    <p class="mt-1 text-xs text-slate-400">
+                        Mettez le jour de versement de votre salaire. Une paie finance alors exactement
+                        un cycle, et le budget ne compte jamais un argent qui n'est pas encore arrivé.
+                        Laissez 1 pour un mois calendaire. Maximum 28, sinon le cycle serait irrégulier
+                        en février.
+                    </p>
+                    <label class="mt-3 flex items-start gap-2 text-[13px] text-slate-600">
+                        <input
+                            v-model="form.cycle_shift_to_business_day"
+                            type="checkbox"
+                            class="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span>
+                            Décaler au jour ouvré suivant
+                            <span class="block text-xs text-slate-400">
+                                Les jours ouvrés bancaires vont du mardi au vendredi, jours fériés vaudois
+                                exclus. Si le jour de départ tombe un samedi, un dimanche, un lundi ou un
+                                férié, le cycle s'ouvre au prochain jour ouvré.
+                            </span>
+                        </span>
+                    </label>
+
+                    <p class="mt-2.5 text-[13px] text-slate-600">
+                        Cycle en cours : <strong class="font-medium">{{ currentPeriod.label }}</strong>
+                        <span v-if="currentPeriod.shifted" class="text-slate-400">(décalé)</span>
+                    </p>
+                    <p v-if="form.errors.cycle_start_day" class="mt-1 text-xs text-rose-600">
+                        {{ form.errors.cycle_start_day }}
+                    </p>
+                </div>
+
+                <div>
                     <label class="mb-1 block text-[13px] text-slate-500" for="setting-tagline">Accroche</label>
                     <input id="setting-tagline" v-model="form.site_tagline" type="text" maxlength="160" class="w-full rounded-lg border-slate-300 text-sm focus:border-sky-500 focus:ring-sky-500" />
                     <p class="mt-1 text-xs text-slate-400">
@@ -29,6 +70,110 @@
                     </p>
                     <p v-if="form.errors.site_tagline" class="mt-1 text-xs text-rose-600">{{ form.errors.site_tagline }}</p>
                 </div>
+            </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+            <p class="mb-1 text-sm font-medium text-slate-800">Jours ouvrés bancaires</p>
+            <p class="mb-4 text-[13px] leading-relaxed text-slate-500">
+                Quand une date tombe un jour non ouvré, elle glisse au jour ouvré suivant.
+                Ce réglage s'applique à l'ouverture du cycle et aux lignes récurrentes qui le demandent.
+            </p>
+
+            <p class="mb-2 text-[13px] text-slate-500">Jours de traitement</p>
+            <div class="mb-5 flex flex-wrap gap-2">
+                <button
+                    v-for="(label, day) in weekdayOptions"
+                    :key="day"
+                    type="button"
+                    class="rounded-lg px-3 py-1.5 text-[13px] transition-colors"
+                    :class="form.business_days.includes(Number(day))
+                        ? 'bg-sky-600 font-medium text-white'
+                        : 'border border-slate-200 text-slate-500 hover:bg-slate-50'"
+                    :aria-pressed="form.business_days.includes(Number(day)) ? 'true' : 'false'"
+                    @click="toggleDay(Number(day))"
+                >
+                    {{ label }}
+                </button>
+            </div>
+            <p v-if="form.errors.business_days" class="-mt-4 mb-4 text-xs text-rose-600">
+                {{ form.errors.business_days }}
+            </p>
+
+            <p class="mb-2 text-[13px] text-slate-500">Jours fériés mobiles</p>
+            <div class="mb-5 space-y-1.5">
+                <label v-for="option in movableOptions" :key="option.key" class="flex items-center gap-2 text-[13px] text-slate-600">
+                    <input
+                        type="checkbox"
+                        class="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                        :checked="form.holidays_movable.includes(option.key)"
+                        @change="toggleMovable(option.key)"
+                    />
+                    {{ option.label }}
+                </label>
+                <p class="text-xs text-slate-400">
+                    Calculés depuis la date de Pâques. Cocher un jour qui tombe systématiquement en
+                    dehors de vos jours de traitement n'a aucun effet.
+                </p>
+            </div>
+
+            <div class="mb-2 flex items-center justify-between">
+                <p class="text-[13px] text-slate-500">Jours fériés à date fixe</p>
+                <button type="button" class="text-xs text-sky-600 hover:text-sky-700" @click="addHoliday">
+                    Ajouter
+                </button>
+            </div>
+
+            <div class="space-y-2">
+                <div v-for="(holiday, index) in form.holidays_fixed" :key="index" class="flex items-center gap-2">
+                    <input
+                        v-model="holiday.label"
+                        type="text"
+                        placeholder="Nom du jour férié"
+                        class="flex-1 rounded-lg border-slate-300 text-sm focus:border-sky-500 focus:ring-sky-500"
+                    />
+                    <input
+                        v-model="holiday.date"
+                        type="text"
+                        placeholder="MM-JJ"
+                        maxlength="5"
+                        class="w-24 rounded-lg border-slate-300 text-center text-sm focus:border-sky-500 focus:ring-sky-500"
+                    />
+                    <button
+                        type="button"
+                        class="text-slate-300 transition-colors hover:text-rose-600"
+                        :aria-label="`Supprimer ${holiday.label || 'cette ligne'}`"
+                        @click="form.holidays_fixed.splice(index, 1)"
+                    >
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <p class="mt-2 text-xs text-slate-400">
+                Format mois-jour, par exemple 12-25 pour Noël. L'année n'est pas demandée : la date
+                vaut pour toutes les années.
+            </p>
+            <p v-if="holidayErrors.length" class="mt-1 text-xs text-rose-600">
+                {{ holidayErrors.join(' ') }}
+            </p>
+
+            <div class="mt-5 rounded-xl bg-slate-50 p-4">
+                <p class="mb-2 text-[13px] font-medium text-slate-700">Six prochains cycles</p>
+                <div class="grid gap-x-4 gap-y-1.5 text-[13px]" style="grid-template-columns: auto 1fr auto">
+                    <template v-for="item in upcomingPeriods" :key="item.key">
+                        <span class="text-slate-400">{{ item.weekday }}</span>
+                        <span class="text-slate-700">{{ item.label }}</span>
+                        <span class="text-right" :class="item.shifted ? 'text-amber-600' : 'text-slate-400'">
+                            {{ item.shifted ? 'décalé' : `${item.days} j` }}
+                        </span>
+                    </template>
+                </div>
+                <p class="mt-2 text-xs text-slate-400">
+                    Enregistrez pour recalculer cet aperçu.
+                </p>
             </div>
         </div>
 
@@ -127,6 +272,10 @@ export default {
 
     props: {
         settings: { type: Object, required: true },
+        currentPeriod: { type: Object, required: true },
+        upcomingPeriods: { type: Array, default: () => [] },
+        weekdayOptions: { type: Object, default: () => ({}) },
+        movableOptions: { type: Array, default: () => [] },
         branding: { type: Object, required: true },
         computedBalance: { type: Number, required: true },
     },
@@ -169,6 +318,11 @@ export default {
                 site_name: this.settings.site_name || 'Compte perso',
                 site_tagline: this.settings.site_tagline || 'Savoir combien vous pouvez dépenser cette semaine.',
                 currency: this.settings.currency || 'CHF',
+                cycle_start_day: this.settings.cycle_start_day || 1,
+                cycle_shift_to_business_day: Boolean(Number(this.settings.cycle_shift_to_business_day)),
+                business_days: [...(this.settings.business_days || [])],
+                holidays_fixed: (this.settings.holidays_fixed || []).map((entry) => ({ ...entry })),
+                holidays_movable: [...(this.settings.holidays_movable || [])],
                 opening_balance: this.settings.opening_balance || 0,
                 opening_balance_date: this.settings.opening_balance_date || new Date().toISOString().slice(0, 10),
                 low_balance_threshold: this.settings.low_balance_threshold || 300,
@@ -179,7 +333,48 @@ export default {
         }
     },
 
+    computed: {
+        // Contrôle local du format : le serveur revalide, mais un retour
+        // immédiat évite un aller-retour pour une faute de frappe.
+        holidayErrors() {
+            const errors = []
+
+            this.form.holidays_fixed.forEach((holiday, index) => {
+                if (!/^\d{2}-\d{2}$/.test(holiday.date || '')) {
+                    errors.push(`Ligne ${index + 1} : la date doit être au format MM-JJ.`)
+                }
+            })
+
+            return errors
+        },
+    },
+
     methods: {
+        toggleDay(day) {
+            const index = this.form.business_days.indexOf(day)
+
+            if (index >= 0) {
+                this.form.business_days.splice(index, 1)
+            } else {
+                this.form.business_days.push(day)
+                this.form.business_days.sort((a, b) => a - b)
+            }
+        },
+
+        toggleMovable(key) {
+            const index = this.form.holidays_movable.indexOf(key)
+
+            if (index >= 0) {
+                this.form.holidays_movable.splice(index, 1)
+            } else {
+                this.form.holidays_movable.push(key)
+            }
+        },
+
+        addHoliday() {
+            this.form.holidays_fixed.push({ label: '', date: '' })
+        },
+
         previewUrl(asset) {
             return this.localPreviews[asset.field] || this.branding[asset.source]
         },

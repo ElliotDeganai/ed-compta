@@ -4,30 +4,36 @@ namespace App\Services;
 
 use App\Models\RecurringItem;
 use App\Models\Transaction;
+use App\Support\BudgetPeriod;
+use App\Support\BusinessDay;
 use Illuminate\Support\Carbon;
 
 /**
- * Materialise les lignes recurrentes du mois demande sous forme de transactions.
+ * Materialise les lignes recurrentes d'une periode sous forme de transactions.
  *
- * Une fois materialisee, une occurrence devient une transaction comme une autre :
- * elle peut etre modifiee (facture d'electricite plus elevee ce mois-ci) sans
- * toucher au modele recurrent, et l'historique des mois passes reste fige.
+ * Une periode pouvant chevaucher deux mois — cycle du 25 au 24 — chaque ligne
+ * est cherchee dans le mois de debut puis dans celui de fin. Le loyer du 30
+ * tombe dans le premier, l'assurance du 5 dans le second, et les deux
+ * appartiennent bien au meme cycle.
+ *
+ * Les lignes marquees shift_to_business_day glissent au jour ouvre suivant :
+ * un salaire attendu le 25 un dimanche est date du mardi 27.
  */
 class MonthlyPlanner
 {
-    public function ensureMonth(int $userId, string $month): void
+    public function ensurePeriod(int $userId, BudgetPeriod $period): void
     {
-        $start = Carbon::parse($month.'-01')->startOfMonth();
-        $end = $start->copy()->endOfMonth();
-
         $items = RecurringItem::query()
             ->where('user_id', $userId)
-            ->activeOn($end->toDateString())
+            ->activeOn($period->endsAt())
             ->get();
 
         foreach ($items as $item) {
-            $day = min((int) $item->day_of_month, $end->day);
-            $date = $start->copy()->setDay($day);
+            $date = $this->dateInPeriod($period, $item);
+
+            if (! $date) {
+                continue;
+            }
 
             if ($item->starts_on->gt($date)) {
                 continue;
@@ -52,5 +58,33 @@ class MonthlyPlanner
                 ]
             );
         }
+    }
+
+    /**
+     * Date effective de la ligne a l'interieur de la periode.
+     *
+     * Le jour est ramene au dernier jour du mois s'il le depasse — un
+     * prelevement au 31 tombe le 30 en avril — puis decale au jour ouvre
+     * suivant si la ligne le demande.
+     */
+    private function dateInPeriod(BudgetPeriod $period, RecurringItem $item): ?Carbon
+    {
+        $day = (int) $item->day_of_month;
+
+        foreach ([$period->start, $period->end] as $reference) {
+            $candidate = $reference->copy()
+                ->setDay(min($day, $reference->daysInMonth))
+                ->startOfDay();
+
+            if ($item->shift_to_business_day) {
+                $candidate = BusinessDay::next($candidate);
+            }
+
+            if ($period->contains($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 }

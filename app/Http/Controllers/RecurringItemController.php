@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\RecurringItem;
 use App\Models\Transaction;
 use App\Services\BudgetService;
+use App\Support\BudgetPeriod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -22,7 +23,7 @@ class RecurringItemController extends Controller
     public function index(Request $request): Response
     {
         $userId = $request->user()->id;
-        $month = Carbon::today()->format('Y-m');
+        $period = BudgetPeriod::current();
 
         $items = RecurringItem::query()
             ->where('user_id', $userId)
@@ -33,7 +34,7 @@ class RecurringItemController extends Controller
 
         $settledIds = Transaction::query()
             ->where('user_id', $userId)
-            ->forMonth($month)
+            ->forPeriod($period)
             ->recurring()
             ->whereDate('occurred_on', '<=', Carbon::today()->toDateString())
             ->pluck('recurring_item_id')
@@ -43,7 +44,8 @@ class RecurringItemController extends Controller
             'items' => $items,
             'settledIds' => $settledIds,
             'categories' => Category::orderBy('position')->orderBy('name')->get(['id', 'name', 'type', 'icon', 'color']),
-            'summary' => $this->budget->summary($userId, $month),
+            'summary' => $this->budget->summary($userId, $period),
+            'period' => $period->toArray(),
         ]);
     }
 
@@ -54,10 +56,6 @@ class RecurringItemController extends Controller
         return back()->with('success', 'Ligne recurrente ajoutee.');
     }
 
-    /**
-     * La modification ne touche que les occurrences futures : les transactions
-     * deja materialisees gardent le montant qui a reellement ete preleve.
-     */
     public function update(RecurringItemRequest $request, RecurringItem $recurring): RedirectResponse
     {
         abort_unless($recurring->user_id === $request->user()->id, 403);

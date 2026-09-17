@@ -31,6 +31,7 @@
                         <p class="truncate text-xs text-slate-400">
                             <span v-if="item.category">{{ item.category.name }} &middot; </span>
                             le {{ item.day_of_month }} du mois
+                            <span v-if="item.shift_to_business_day">ou jour ouvré suivant</span>
                             <span v-if="!item.is_active"> &middot; inactive</span>
                         </p>
                     </div>
@@ -135,6 +136,22 @@
                     <textarea id="recurring-description" v-model="form.description" rows="2" class="w-full rounded-lg border-slate-300 text-sm focus:border-sky-500 focus:ring-sky-500" />
                 </div>
 
+                <label class="flex items-start gap-2 text-[13px] text-slate-600">
+                    <input
+                        v-model="form.shift_to_business_day"
+                        type="checkbox"
+                        class="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <span>
+                        Décaler au jour ouvré suivant
+                        <span class="block text-xs text-slate-400">
+                            À cocher pour un salaire : le versement n'a pas lieu un samedi, un dimanche,
+                            un lundi ou un jour férié. À laisser décoché pour un prélèvement dont la date
+                            est imposée.
+                        </span>
+                    </span>
+                </label>
+
                 <label class="flex items-center gap-2 text-[13px] text-slate-600">
                     <input v-model="form.is_active" type="checkbox" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
                     Ligne active
@@ -230,6 +247,7 @@ export default {
                 amount: '',
                 type,
                 day_of_month: 1,
+                shift_to_business_day: false,
                 starts_on: new Date().toISOString().slice(0, 10),
                 ends_on: '',
                 category_id: null,
@@ -246,6 +264,7 @@ export default {
                     amount: item.amount,
                     type: item.type,
                     day_of_month: item.day_of_month,
+                    shift_to_business_day: Boolean(item.shift_to_business_day),
                     starts_on: String(item.starts_on).slice(0, 10),
                     ends_on: item.ends_on ? String(item.ends_on).slice(0, 10) : '',
                     category_id: item.category_id,

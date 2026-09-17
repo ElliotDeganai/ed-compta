@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\Setting;
 use App\Models\Transaction;
 use App\Services\BudgetService;
+use App\Support\BudgetPeriod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -19,14 +21,14 @@ class DashboardController extends Controller
 
     public function index(Request $request): Response
     {
-        $month = $this->resolveMonth($request);
+        $period = $this->resolvePeriod($request);
         $userId = $request->user()->id;
 
-        $summary = $this->budget->summary($userId, $month);
+        $summary = $this->budget->summary($userId, $period);
 
         $recurring = Transaction::query()
             ->where('user_id', $userId)
-            ->forMonth($month)
+            ->forPeriod($period)
             ->recurring()
             ->with('category:id,name,icon,color')
             ->orderBy('occurred_on')
@@ -34,7 +36,7 @@ class DashboardController extends Controller
 
         $oneOff = Transaction::query()
             ->where('user_id', $userId)
-            ->forMonth($month)
+            ->forPeriod($period)
             ->oneOff()
             ->with(['category:id,name,icon,color', 'documents:id,documentable_id,documentable_type,original_name'])
             ->orderByDesc('occurred_on')
@@ -43,18 +45,15 @@ class DashboardController extends Controller
 
         return Inertia::render('Dashboard', [
             'summary' => $summary,
+            'weeks' => $this->budget->weeksFrom($summary),
             'recurringLines' => $recurring,
             'latestMovements' => $oneOff,
             'categories' => Category::orderBy('position')->orderBy('name')->get(['id', 'name', 'type', 'icon', 'color']),
             'today' => Carbon::today()->toDateString(),
-            'months' => $this->availableMonths($userId),
+            'periods' => $this->availablePeriods($userId, $period),
         ]);
     }
 
-    /**
-     * Rapprochement bancaire : on saisit le solde reel, l'outil cree la ligne
-     * d'ecart pour que le calcul reparte juste.
-     */
     public function reconcile(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -81,30 +80,57 @@ class DashboardController extends Controller
         return back()->with('success', 'Solde rapproche, ecart de '.number_format($difference, 2, '.', ' ').' enregistre.');
     }
 
-    private function resolveMonth(Request $request): string
+    private function resolvePeriod(Request $request): BudgetPeriod
     {
-        $month = (string) $request->query('month', Carbon::today()->format('Y-m'));
+        $key = (string) $request->query('month', '');
 
-        return preg_match('/^\d{4}-\d{2}$/', $month) === 1
-            ? $month
-            : Carbon::today()->format('Y-m');
+        return preg_match('/^\d{4}-\d{2}$/', $key) === 1
+            ? BudgetPeriod::fromKey($key)
+            : BudgetPeriod::current();
     }
 
     /**
-     * @return array<int, string>
+     * Periodes proposees au selecteur : de la plus ancienne donnee connue
+     * jusqu'a douze cycles a venir.
+     *
+     * Les cycles futurs servent a anticiper — saisir une facture connue
+     * d'avance — et les passes a corriger apres coup.
+     *
+     * @return array<int, array<string, mixed>>
      */
-    private function availableMonths(int $userId): array
+    private function availablePeriods(int $userId, BudgetPeriod $selected): array
     {
         $first = Transaction::where('user_id', $userId)->min('occurred_on');
-        $cursor = $first ? Carbon::parse($first)->startOfMonth() : Carbon::today()->startOfMonth();
-        $last = Carbon::today()->startOfMonth();
-        $months = [];
+        $anchor = $first ? Carbon::parse($first) : Carbon::today();
 
-        while ($cursor->lte($last)) {
-            $months[] = $cursor->format('Y-m');
-            $cursor->addMonth();
+        $openingDate = Setting::get('opening_balance_date');
+
+        if ($openingDate && Carbon::parse($openingDate)->lt($anchor)) {
+            $anchor = Carbon::parse($openingDate);
         }
 
-        return array_reverse($months);
+        $cursor = BudgetPeriod::containing($anchor);
+        $last = BudgetPeriod::current();
+
+        // Douze cycles d'avance, plus la periode consultee si elle sort de
+        // cette fenetre — sinon le selecteur afficherait une valeur absente
+        // de sa propre liste.
+        for ($i = 0; $i < 12; $i++) {
+            $last = $last->next();
+        }
+
+        $periods = [];
+
+        while ($cursor->key <= $last->key) {
+            $periods[] = $cursor->toArray();
+            $cursor = $cursor->next();
+        }
+
+        if (! collect($periods)->contains(fn (array $period) => $period['key'] === $selected->key)) {
+            $periods[] = $selected->toArray();
+            usort($periods, fn (array $a, array $b) => strcmp($a['key'], $b['key']));
+        }
+
+        return $periods;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\BudgetPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -38,12 +39,14 @@ class Transaction extends Model
         return $this->morphMany(Document::class, 'documentable');
     }
 
-    public function scopeForMonth(Builder $query, string $month): Builder
+    /**
+     * Mouvements d'une periode budgetaire. Remplace l'ancien scope par mois
+     * calendaire : avec un cycle demarrant le 25, une periode chevauche deux
+     * mois et un filtre sur le mois donnerait des totaux faux.
+     */
+    public function scopeForPeriod(Builder $query, BudgetPeriod $period): Builder
     {
-        return $query->whereBetween('occurred_on', [
-            $month.'-01',
-            date('Y-m-t', strtotime($month.'-01')),
-        ]);
+        return $query->whereBetween('occurred_on', [$period->startsAt(), $period->endsAt()]);
     }
 
     public function scopeRecurring(Builder $query): Builder

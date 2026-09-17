@@ -9,6 +9,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\RecurringItemController;
 use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\SimulationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -42,6 +43,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('recurrents', [RecurringItemController::class, 'index'])
         ->middleware('permission:view dashboard')
         ->name('recurring.index');
+
+    Route::get('simulation', [SimulationController::class, 'index'])->middleware('permission:view dashboard')->name('simulation.index');
+
+    Route::middleware('permission:manage transactions')->group(function () { Route::post('simulation', [SimulationController::class, 'store'])->name('simulation.store'); Route::put('simulation/{simulation}', [SimulationController::class, 'update'])->name('simulation.update'); Route::post('simulation/{simulation}/bascule', [SimulationController::class, 'toggle'])->name('simulation.toggle'); Route::delete('simulation/{simulation}', [SimulationController::class, 'destroy'])->name('simulation.destroy'); Route::post('simulation/convertir', [SimulationController::class, 'convert'])->name('simulation.convert'); Route::post('simulation/vider', [SimulationController::class, 'clear'])->name('simulation.clear'); });
 
     Route::middleware('permission:manage recurring')->group(function () {
         Route::post('recurrents', [RecurringItemController::class, 'store'])->name('recurring.store');
